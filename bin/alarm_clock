@@ -1,0 +1,122 @@
+#!/usr/bin/env ruby
+
+require 'time'
+require 'shellwords'
+
+class Alarm
+  attr_accessor :volume
+  DELAY = 15
+  INCREMENT = 1
+  def self.default_time
+    Time.now + 8.1 * 60 * 60
+  end
+
+  def delay
+    DELAY
+  end
+  
+  def increment
+    INCREMENT
+  end
+  
+  def initialize(target_time=nil)
+    @target_time = target_time || Alarm.default_time
+    @volume = 0
+    @system_volume = 2
+    display_start_time
+    pause_music        
+    sleep(delay)
+    mute_volume
+    dim_screen
+    alarm_loop
+  end
+
+  def alarm_loop
+    while(true)
+      if time_to_wake?
+        bump_volume
+        play_music
+        set_music_volume
+        set_system_volume
+        bump_brightness
+        rollover_volume_to_system
+        exit if @system_volume >= 7
+      end
+      sleep(delay)
+    end
+  end
+
+  def bump_volume
+    @volume += increment
+  end
+
+  def bump_brightness
+    send_key_code 113 if (volume % 6 == 0)
+  end
+
+  def rollover_volume_to_system
+    if volume >= 100
+      @system_volume = @system_volume +1
+      @volume = 75.0 * ((@system_volume.to_f - 1) / @system_volume)
+    end
+  end
+  
+  def set_system_volume
+    execute_command "set Volume #{@system_volume}"
+  end
+
+  def play_music
+    execute_command 'tell application "Spotify" to play'
+  end
+
+  def pause_music
+    execute_command 'tell application "Spotify" to pause'
+  end
+
+  def set_music_volume
+    execute_command 'tell application "Spotify" to sound volume as integer'
+    execute_command 'tell application "Spotify" to set sound volume to ' + volume.to_s
+  end
+
+  def time_to_wake?
+    Time.now > start_time
+  end
+
+  def start_time
+    @target_time - delay * (20 / increment)
+  end
+
+  def display_start_time
+    puts "Waking at #{start_time}"
+  end
+
+  def mute_volume
+    puts "Setting volume to mute!"    
+    execute_command 'set Volume 0'
+  end
+
+  def dim_screen
+    20.times do
+      send_key_code 107
+    end
+  end
+
+  def send_key_code(code)
+      execute_command "tell application \"System Events\"
+        key code #{code}
+      end tell"
+  end
+
+  def execute_command(command)
+    command = Shellwords.shellescape(command)
+    `osascript -e #{command}`
+  end
+  
+end
+
+if ARGV[0]
+  Alarm.new(Time.parse(ARGV[0]))
+else
+  Alarm.new
+end
+
